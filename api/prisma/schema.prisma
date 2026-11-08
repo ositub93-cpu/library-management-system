@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATRON
+  LIBRARIAN
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  role      Role     @default(PATRON)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reviews Review[]
+}
+
+model Genre {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  description String?
+
+  books Book[]
+}
+
+model Book {
+  id            Int      @id @default(autoincrement())
+  title         String
+  author        String
+  publishedYear Int?
+  description   String?
+  copiesTotal   Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  genreId Int
+  genre   Genre @relation(fields: [genreId], references: [id], onDelete: Restrict)
+
+  reviews Review[]
+
+  @@unique([title, author])
+  @@index([genreId])
+}
+
+// Stretch: Review (many-to-one to both Book and User)
+model Review {
+  id        Int      @id @default(autoincrement())
+  rating    Int // validated 1-5 in the service/DTO layer
+  comment   String?
+  createdAt DateTime @default(now())
+
+  bookId Int
+  book   Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, userId]) // one review per user per book
+  @@index([bookId])
+}
