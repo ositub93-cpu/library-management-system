@@ -5,7 +5,8 @@
 ```bash
 cd api
 cp .env.example .env            # then paste your hosted PostgreSQL URL
-npm install prisma@6 @prisma/client@6 --save-dev   # (client as dependency)
+npm install -D prisma@6
+npm install @prisma/client@6
 npx prisma migrate dev --name init   # creates + applies the migration
 npx prisma db seed                   # inserts 4 genres, 16 books, 2 users, 2 reviews
 ```
