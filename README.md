@@ -1,16 +1,44 @@
 # Library Management System
 
-NestJS API with a Prisma 7 data layer on hosted PostgreSQL (Neon).
+Backend API for a library catalogue: genres, books with search and pagination, and JWT authentication with role-based access. Built with NestJS, Prisma 7 and PostgreSQL (Neon).
 
 ## Setup
 
 1. `cd api`
 2. `npm install`
-3. Copy `.env.example` to `.env` and put your real `DATABASE_URL` in it
+3. Copy `.env.example` to `.env` and fill in real values for `DATABASE_URL` and `JWT_SECRET`
 4. `npx prisma migrate deploy`
 5. `npx prisma generate`
-6. `npx prisma db seed` (4 genres, 16 books)
-7. `npm run start:dev`
+6. `npx prisma db seed`
+7. `npm run start:dev` (the API runs at http://localhost:3000)
+
+Generate a `JWT_SECRET` with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
+
+The seed creates 4 genres, 16 books and one development librarian (`librarian@library.test`, password `ChangeMe123!`). That account is for local development only. Override it with `LIBRARIAN_EMAIL` and `LIBRARIAN_PASSWORD` in `.env`.
+
+## Endpoints
+
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| POST | `/auth/register` | public | Create a PATRON account and receive a JWT |
+| POST | `/auth/login` | public | Log in and receive a JWT |
+| GET | `/auth/me` | any logged-in user | Show the current user |
+| GET | `/genres` | public | List genres |
+| GET | `/genres/:id` | public | Get one genre |
+| POST | `/genres` | public | Create a genre |
+| PATCH | `/genres/:id` | public | Rename a genre |
+| DELETE | `/genres/:id` | public | Delete a genre that has no books |
+| GET | `/books` | public | List books with filtering, search and pagination |
+| GET | `/books/:id` | public | Get one book |
+| POST | `/books` | LIBRARIAN | Create a book |
+| PATCH | `/books/:id` | LIBRARIAN | Update a book |
+| DELETE | `/books/:id` | LIBRARIAN | Delete a book |
+
+`GET /books` accepts `genreId`, `search` (matches title or author, case-insensitive), `page` (default 1) and `limit` (default 10, maximum 100). It returns `{ data, meta: { total, page, limit, totalPages } }`.
+
+Protected routes need the header `Authorization: Bearer <token>`. Errors: 400 for failed validation, 401 for a missing or invalid token, 403 for the wrong role, 404 for a missing record and 409 for a duplicate or a conflict.
+
+A Postman collection covering every endpoint is in `docs/postman_collection.json`.
 
 ## Schema Decisions
 
@@ -18,10 +46,12 @@ NestJS API with a Prisma 7 data layer on hosted PostgreSQL (Neon).
 
 Other decisions:
 
-- `Role` enum (`PATRON`, `LIBRARIAN`) on `User` makes invalid roles impossible at the database level; `PATRON` is the safe default.
-- `@@unique([title, author])` on `Book` prevents duplicate catalog entries, and the seed checks before inserting, so re-running it never duplicates rows.
-- `@@index([genreId])` speeds up the most common catalog filter.
+- `Role` enum (`PATRON`, `LIBRARIAN`) on `User` makes invalid roles impossible at the database level. `PATRON` is the default, and registration never accepts a role from the client, so nobody can make themselves a librarian.
+- `Book.isbn` is unique, and `@@unique([title, author])` prevents duplicate catalogue entries. The seed uses upserts, so running it again never duplicates rows.
+- `Book.totalCopies` records how many copies the library holds, with a default of 1.
+- `@@index([genreId])` speeds up the most common catalogue filter.
 - `User.email` and `Genre.name` are unique.
+- Passwords are stored only as bcrypt hashes.
 
 ## Prisma vs a document database
 

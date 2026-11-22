@@ -1,9 +1,23 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
+import * as bcrypt from "bcrypt";
 import { PrismaClient } from "../src/generated/prisma/client";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
+
+// Development librarian. Override with LIBRARIAN_EMAIL / LIBRARIAN_PASSWORD in .env.
+const librarianEmail = process.env.LIBRARIAN_EMAIL ?? "librarian@library.test";
+const librarianPassword = process.env.LIBRARIAN_PASSWORD ?? "ChangeMe123!";
+
+// Sample ISBN-13s for seed data: a fixed prefix plus a computed check digit.
+function isbn13(n: number): string {
+  const base = `978000${String(n).padStart(6, "0")}`;
+  const sum = base
+    .split("")
+    .reduce((acc, d, i) => acc + Number(d) * (i % 2 === 0 ? 1 : 3), 0);
+  return base + ((10 - (sum % 10)) % 10);
+}
 
 const genres = ["Fantasy", "Science Fiction", "Non-Fiction", "Mystery"];
 
@@ -35,23 +49,37 @@ async function main() {
     });
   }
 
-  for (const b of books) {
+  for (const [i, b] of books.entries()) {
     const genre = await prisma.genre.findUniqueOrThrow({
       where: { name: b.genre },
     });
-    const exists = await prisma.book.findFirst({
-      where: { title: b.title, genreId: genre.id },
+    await prisma.book.upsert({
+      where: { isbn: isbn13(i + 1) },
+      update: {},
+      create: {
+        title: b.title,
+        author: b.author,
+        isbn: isbn13(i + 1),
+        totalCopies: 3,
+        genreId: genre.id,
+      },
     });
-    if (!exists) {
-      await prisma.book.create({
-        data: { title: b.title, author: b.author, genreId: genre.id },
-      });
-    }
   }
+
+  await prisma.user.upsert({
+    where: { email: librarianEmail },
+    update: { role: "LIBRARIAN" },
+    create: {
+      email: librarianEmail,
+      password: await bcrypt.hash(librarianPassword, 10),
+      role: "LIBRARIAN",
+    },
+  });
 
   const genreCount = await prisma.genre.count();
   const bookCount = await prisma.book.count();
   console.log(`Seed complete: ${genreCount} genres, ${bookCount} books`);
+  console.log(`Librarian ready: ${librarianEmail}`);
 }
 
 main()
